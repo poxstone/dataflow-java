@@ -132,6 +132,12 @@ mvn compile exec:java \
 --project=${PROJECT_ID} \
 --region=${REGION}";
 
+gcloud dataflow jobs run "jobClean001" \
+--gcs-location="${BUCKET_TPL3}" \
+--region="${REGION}" \
+--project="${PROJECT_ID}" \
+--parameters="resultLocation=${BUCKET_OUTPUT_FILE},bigtableProjectId=${PROJECT_ID},bigtableInstanceId=${BT_INSTANCE},bigtableTableId=${BT_TABLE}";
+
 ```
 
 
@@ -179,5 +185,12 @@ mvn compile exec:java \
 --runner=dataflow \
 --project=${PROJECT_ID} \
 --region=${REGION}";
+
+
+gcloud dataflow jobs run "jobClean001" \
+--gcs-location="${BUCKET_TPL3}" \
+--region="${REGION}" \
+--project="${PROJECT_ID}" \
+--parameters="resultLocation=${BUCKET_OUTPUT_FILE},bigtableProjectId=${PROJECT_ID},bigtableInstanceId=${BT_INSTANCE},bigtableTableId=${BT_TABLE}";
 
 ```

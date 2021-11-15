@@ -109,7 +109,7 @@ public class BigTableClean {
   
       pipeline.apply("Main prefix", Create.of(prefixes))
           .apply("Validate rowkey", ParDo.of(new ScanPrefixDoFn(bigtableConfig, bigtableConfig.getTableId())))
-          .apply("Create mutations (Delete)", ParDo.of(new DeleteKeyDoFn()));
+          .apply("Create mutations (Delete)", ParDo.of(new DeleteKeyDoFn()))
           .apply("Delete keys", CloudBigtableIO.writeToTable(bigtableConfig));
   
       pipeline.run();
