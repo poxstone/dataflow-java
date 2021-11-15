@@ -23,16 +23,17 @@ cd word-count-beam/;
 ## Run this code Word-count
 
 ```bash
-PROJECT_ID="co-proyecto-rnkofer-dev";
+PROJECT_ID="co-myproject-rnkofer-dev";
 BT_INSTANCE="rnkofertasbigtable-dev";
 BT_TABLE="OutputRankingOfertasColumns";
 BUCKET_INPUT_FILE="gs://apache-beam-samples/shakespeare/kinglear.txt";
-BUCKET_OUTPUT_FILE="gs://co-proyecto-temporal-ranking-dev/df-salida-java/output.txt";
-BUCKET_OUTPUT_DIR="gs://co-proyecto-temporal-ranking-dev/df-output-java/";
-BUCKET_TEMP="gs://co-proyecto-temporal-ranking-dev/df-temp-java/";
-BUCKET_STAGING="gs://co-proyecto-solicitudes-ranking-dev/templates/df-staging-java";
-BUCKET_TPL1="gs://co-proyecto-solicitudes-ranking-dev/templates/WordCount.json";
-BUCKET_TPL2="gs://co-proyecto-solicitudes-ranking-dev/templates/BigTableCount.json";
+BUCKET_OUTPUT_FILE="gs://co-myproject-temporal-ranking-dev/df-salida-java/output.txt";
+BUCKET_OUTPUT_DIR="gs://co-myproject-temporal-ranking-dev/df-output-java/";
+BUCKET_TEMP="gs://co-myproject-temporal-ranking-dev/df-temp-java/";
+BUCKET_STAGING="gs://co-myproject-solicitudes-ranking-dev/templates/df-staging-java";
+BUCKET_TPL1="gs://co-myproject-solicitudes-ranking-dev/templates/WordCount.json";
+BUCKET_TPL2="gs://co-myproject-solicitudes-ranking-dev/templates/BigTableCount.json";
+BUCKET_TPL3="gs://co-myproject-solicitudes-ranking-dev/templates/BigTableClean.json";
 REGION="us-west1";
 
 
@@ -174,7 +175,7 @@ mvn compile exec:java \
 --bigtableTableId=${BT_TABLE} \
 --stagingLocation=${BUCKET_STAGING} \
 --gcpTempLocation=${BUCKET_TEMP} \
---templateLocation=${BUCKET_TPL2} \
+--templateLocation=${BUCKET_TPL3} \
 --runner=dataflow \
 --project=${PROJECT_ID} \
 --region=${REGION}";

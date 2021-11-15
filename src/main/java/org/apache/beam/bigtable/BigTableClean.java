@@ -1,6 +1,11 @@
 package org.apache.beam.bigtable;
 
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import com.google.common.collect.Lists;
+
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.io.Read;
 import org.apache.beam.sdk.io.TextIO;
@@ -8,13 +13,23 @@ import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.options.ValueProvider;
 import org.apache.beam.sdk.transforms.Count;
+import org.apache.beam.sdk.transforms.Create;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
+
+import org.apache.hadoop.hbase.client.Delete;
+import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.filter.FirstKeyOnlyFilter;
+import org.apache.hadoop.hbase.filter.KeyOnlyFilter;
+import org.apache.hadoop.hbase.TableName;
 
+import com.google.cloud.bigtable.beam.CloudBigtableTableConfiguration;
+import com.google.cloud.bigtable.beam.AbstractCloudBigtableTableDoFn;
 import com.google.cloud.bigtable.beam.CloudBigtableIO;
+import com.google.cloud.bigtable.beam.CloudBigtableConfiguration;
 import com.google.cloud.bigtable.beam.CloudBigtableScanConfiguration;
 
 import org.apache.beam.sdk.options.Description;
@@ -39,51 +54,66 @@ public class BigTableClean {
     @Description("The Cloud Bigtable table ID in the instance." )
     ValueProvider<String> getResultLocation();
     void setResultLocation(ValueProvider<String> value);
-    
   }
 
-  // Converts a Long to a String so that it can be written to a file.
-  static DoFn<Long, String> stringifier = new DoFn<Long, String>() {
-    private static final long serialVersionUID = 1L;
+    /**
+     * Query Bigtable for all of the keys that start with the given prefix.
+     */
+  static class ScanPrefixDoFn extends AbstractCloudBigtableTableDoFn<String, byte[]> {
+    private final String tableId;
+
+    public ScanPrefixDoFn(CloudBigtableConfiguration config, String tableId) {
+        super(config);
+        this.tableId = tableId;
+    }
 
     @ProcessElement
-    public void processElement(DoFn<Long, String>.ProcessContext context) throws Exception {
-      context.output(context.element().toString());
+    public void processElement(ProcessContext c) throws IOException {
+      Scan scan = new Scan()
+            .setRowPrefixFilter(c.element().getBytes())
+            .setFilter(new KeyOnlyFilter());
+
+      Table table = getConnection().getTable(TableName.valueOf(tableId));
+
+      for (Result result : table.getScanner(scan)) {
+        c.output(result.getRow());
+      }
     }
-  };
+  }
+
+    /**
+     * Converts a row key into a delete mutation to be written to Bigtable.
+     */
+  static class DeleteKeyDoFn extends DoFn<byte[], Mutation> {
+        @ProcessElement
+        public void processElement(ProcessContext c) {
+            c.output(new Delete(c.element()));
+    }
+  }
 
   public static void main(String[] args) {
     CloudBigtableOptions options = PipelineOptionsFactory.fromArgs(args).withValidation().as(CloudBigtableOptions.class);
-    
-    String PROJECT_ID = options.getBigtableProjectId().get();
-    String INSTANCE_ID = options.getBigtableInstanceId().get();
-    String TABLE_ID = options.getBigtableTableId().get();
-
-    // [START bigtable_dataflow_connector_scan_config]
-    Scan scan = new Scan();
-    scan.setCacheBlocks(false);
-    scan.setFilter(new FirstKeyOnlyFilter());
-
-    // CloudBigtableTableConfiguration contains the project, zone, cluster and table to connect to.
-    // You can supply an optional Scan() to filter the rows that will be read.
-    CloudBigtableScanConfiguration config = new CloudBigtableScanConfiguration.Builder()
-            .withProjectId(options.getBigtableProjectId())
-            .withInstanceId(options.getBigtableInstanceId())
-            .withTableId(options.getBigtableTableId())
-            .withScan(scan)
-            .build();
-
-    Pipeline p = Pipeline.create(options);
-
-    p.apply(Read.from(CloudBigtableIO.read(config)))
-        .apply(Count.<Result>globally())
-        .apply(ParDo.of(stringifier))
-        .apply(TextIO.write().to(options.getResultLocation()));
-    // [END bigtable_dataflow_connector_scan_config]
-
-    p.run();
-    //p.run().waitUntilFinish(); // fail with this
-
-    // Once this is done, you can get the result file via "gsutil cp <resultLocation>-00000-of-00001"
-  }
+  
+      CloudBigtableTableConfiguration bigtableConfig = new CloudBigtableTableConfiguration.Builder()
+          .withProjectId(options.getBigtableProjectId())
+          .withInstanceId(options.getBigtableInstanceId())
+          .withTableId(options.getBigtableTableId())
+          .build();
+  
+      ArrayList<String> prefixes = Lists.newArrayList("Exito", "Carulla");
+  
+      // randomize the prefixes to avoid hotspoting a region.
+      Collections.shuffle(prefixes);
+  
+      Pipeline pipeline = Pipeline.create(options);
+  
+      pipeline.apply("Main prefix", Create.of(prefixes))
+          .apply("Validate rowkey", ParDo.of(new ScanPrefixDoFn(bigtableConfig, bigtableConfig.getTableId())))
+          .apply("Create mutations (Delete)", ParDo.of(new DeleteKeyDoFn()));
+          .apply("Delete keys", CloudBigtableIO.writeToTable(bigtableConfig));
+  
+      pipeline.run();
+      //pipeline.run().waitUntilFinish();
+    }
+  
 }
